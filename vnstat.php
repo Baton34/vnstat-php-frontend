@@ -105,15 +105,20 @@
         }
         else
         {
-            $fd = popen("$vnstat_bin --dumpdb -i $iface", "r");
+            $fd = popen("$vnstat_bin --json a -i $iface", "r");
             if (is_resource($fd))
             {
             	$buffer = '';
             	while (!feof($fd)) {
                 	$buffer .= fgets($fd);
             	}
-            	$vnstat_data = explode("\n", $buffer);
             	pclose($fd);
+				$vnstat_data = array();
+				$obj=json_decode($buffer,true);
+				convertFromJson('hour',$obj,$vnstat_data);
+				convertFromJson('day',$obj,$vnstat_data);
+				convertFromJson('month',$obj,$vnstat_data);
+				convertFromJson('top',$obj,$vnstat_data);
             }
         }
 
@@ -208,4 +213,33 @@
         rsort($month);
         rsort($hour);
     }
+
+    function convertFromJson($tP,$json,&$data) {
+        $arr=array_reverse($json['interfaces']['0']['traffic'][$tP]);
+        $fL=$tP[0];
+        $maxIndex=24;
+        if ($fL=='d') {
+            $maxIndex=30;
+        }
+        elseif ($fL=='m') {
+            $maxIndex=12;
+        }
+        elseif ($fL=='t') {
+            $maxIndex=5;
+        }
+        for ($i=0; $i< min($maxIndex,count($arr)); $i++) {
+            $line=$fL.';'.$i.';'.strtotime(
+                ($fL=='h' ? $arr[$i]['time'][$tP] : "00").":".
+                ($fL=='h' ? $arr[$i]['time']['minute'] : "00").":00".
+                $arr[$i]['date']['month']."/".
+                ($fL=='m' ? "01" : $arr[$i]['date']['day'])."/".
+                $arr[$i]['date']['year']).";".
+                ($fL!='h' ? "0;0;" : "").
+                intdiv($arr[$i]['rx'],1024) .";".
+                intdiv($arr[$i]['tx'],1024) .
+                ($fL!='h' ? ";1" : "");
+            $data[]=$line;
+        }
+    }
+
 ?>
